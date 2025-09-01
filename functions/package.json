@@ -1,0 +1,17 @@
+{
+  "name": "lab-inventory-functions",
+  "version": "0.1.0",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.16.3",
+    "axios": "^1.11.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "firebase-admin": "^11.10.0",
+    "firebase-functions": "^5.1.0",
+    "uuid": "^9.0.0"
+  }
+}

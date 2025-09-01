@@ -1,0 +1,182 @@
+{
+  "name": "FR-Scheduling-and-Notify",
+  "description": "Schedules lab bookings, updates Excel log, and sends notifications",
+  "trigger": {
+    "type": "Manual",
+    "parameters": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "RequestId": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  },
+  "actions": [
+    {
+      "name": "Get_Lab_Request",
+      "type": "SharePoint.GetItem",
+      "parameters": {
+        "site": "https://your-tenant.sharepoint.com/sites/your-site",
+        "list": "LabRequests",
+        "id": "@triggerBody()?['RequestId']"
+      }
+    },
+    {
+      "name": "Get_Lab_Calendar",
+      "type": "SharePoint.GetItems",
+      "parameters": {
+        "site": "https://your-tenant.sharepoint.com/sites/your-site",
+        "list": "Labs",
+        "filter": "LabName eq '@{body('Get_Lab_Request')?['PreferredLab']}'"
+      }
+    },
+    {
+      "name": "Set_Calendar_Address",
+      "type": "Compose",
+      "parameters": {
+        "inputs": "@if(greater(length(body('Get_Lab_Calendar')?['value']), 0), first(body('Get_Lab_Calendar')?['value'])?['CalendarAddress'], 'lab-a@school.za')"
+      }
+    },
+    {
+      "name": "Get_Calendar_Events",
+      "type": "Office365.GetEventsCalendarViewV3",
+      "parameters": {
+        "calendarId": "@outputs('Set_Calendar_Address')",
+        "startDateTimeUtc": "@body('Get_Lab_Request')?['PreferredDate']",
+        "endDateTimeUtc": "@addMinutes(body('Get_Lab_Request')?['PreferredDate'], 90)"
+      }
+    },
+    {
+      "name": "Check_for_Conflicts",
+      "type": "Condition",
+      "parameters": {
+        "condition": "@greater(length(body('Get_Calendar_Events')?['value']), 0)",
+        "actions": {
+          "Find_Next_Available_Slot": {
+            "type": "Compose",
+            "parameters": {
+              "inputs": "@addMinutes(body('Get_Lab_Request')?['PreferredDate'], 90)"
+            }
+          }
+        },
+        "else": {
+          "Use_Preferred_Time": {
+            "type": "Compose",
+            "parameters": {
+              "inputs": "@body('Get_Lab_Request')?['PreferredDate']"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Set_Final_Start_Time",
+      "type": "Compose",
+      "parameters": {
+        "inputs": "@if(greater(length(body('Get_Calendar_Events')?['value']), 0), outputs('Find_Next_Available_Slot'), body('Get_Lab_Request')?['PreferredDate'])"
+      }
+    },
+    {
+      "name": "Create_Calendar_Event",
+      "type": "Office365.CreateEventV4",
+      "parameters": {
+        "calendarId": "@outputs('Set_Calendar_Address')",
+        "item": {
+          "subject": "Lab Booking: @{body('Get_Lab_Request')?['Title']} — @{body('Get_Lab_Request')?['TeacherName']}",
+          "start": "@outputs('Set_Final_Start_Time')",
+          "end": "@addMinutes(outputs('Set_Final_Start_Time'), 90)",
+          "body": "<h3>Lab Request Details</h3><p><strong>Teacher:</strong> @{body('Get_Lab_Request')?['TeacherName']}</p><p><strong>Email:</strong> @{body('Get_Lab_Request')?['TeacherEmail']}</p><p><strong>Experiment:</strong> @{body('Get_Lab_Request')?['Title']}</p><p><strong>Materials:</strong> @{body('Get_Lab_Request')?['Materials']}</p>",
+          "attendees": [
+            {
+              "emailAddress": {
+                "address": "@body('Get_Lab_Request')?['TeacherEmail']",
+                "name": "@body('Get_Lab_Request')?['TeacherName']"
+              }
+            }
+          ],
+          "location": "@body('Get_Lab_Request')?['PreferredLab']"
+        }
+      }
+    },
+    {
+      "name": "Update_Request_Status",
+      "type": "SharePoint.UpdateItem",
+      "parameters": {
+        "site": "https://your-tenant.sharepoint.com/sites/your-site",
+        "list": "LabRequests",
+        "id": "@triggerBody()?['RequestId']",
+        "item": {
+          "Status": "SCHEDULED",
+          "BookingId": "@body('Create_Calendar_Event')?['id']"
+        }
+      }
+    },
+    {
+      "name": "Add_Excel_Log_Row",
+      "type": "Excel.AddRowToTable",
+      "parameters": {
+        "source": "sites/your-site",
+        "drive": "b!...", 
+        "file": "LabRequestsLog.xlsx",
+        "table": "LabRequestsLog",
+        "row": {
+          "ID": "@body('Get_Lab_Request')?['ID']",
+          "Teacher": "@body('Get_Lab_Request')?['TeacherName']",
+          "Email": "@body('Get_Lab_Request')?['TeacherEmail']",
+          "Title": "@body('Get_Lab_Request')?['Title']",
+          "Materials": "@body('Get_Lab_Request')?['Materials']",
+          "PreferredDate": "@body('Get_Lab_Request')?['PreferredDate']",
+          "PreferredLab": "@body('Get_Lab_Request')?['PreferredLab']",
+          "Status": "SCHEDULED",
+          "Step": "SCHEDULED",
+          "Missing": "",
+          "BookingId": "@body('Create_Calendar_Event')?['id']",
+          "Start": "@outputs('Set_Final_Start_Time')",
+          "Lab": "@body('Get_Lab_Request')?['PreferredLab']",
+          "URL": "@body('Create_Calendar_Event')?['webLink']",
+          "Reason": "",
+          "Created": "@utcNow()",
+          "Updated": "@utcNow()"
+        }
+      }
+    },
+    {
+      "name": "Send_Approval_Email_to_Teacher",
+      "type": "Office365.SendEmailV2",
+      "parameters": {
+        "To": "@body('Get_Lab_Request')?['TeacherEmail']",
+        "Subject": "Lab booking confirmed: @{body('Get_Lab_Request')?['Title']}",
+        "Body": "<h3>Lab Booking Confirmed</h3><p>Dear @{body('Get_Lab_Request')?['TeacherName']},</p><p>Your lab request has been approved and scheduled.</p><h4>Booking Details:</h4><ul><li><strong>Experiment:</strong> @{body('Get_Lab_Request')?['Title']}</li><li><strong>Date & Time:</strong> @{formatDateTime(outputs('Set_Final_Start_Time'), 'dd/MM/yyyy HH:mm')} - @{formatDateTime(addMinutes(outputs('Set_Final_Start_Time'), 90), 'HH:mm')}</li><li><strong>Lab:</strong> @{body('Get_Lab_Request')?['PreferredLab']}</li><li><strong>Materials:</strong> @{body('Get_Lab_Request')?['Materials']}</li></ul><p><a href=\"@{body('Create_Calendar_Event')?['webLink']}\">View in Calendar</a></p><h4>Safety Checklist:</h4><ul><li>Ensure all students have appropriate safety equipment</li><li>Review material safety data sheets</li><li>Check emergency procedures</li><li>Verify lab equipment is functioning</li></ul>",
+        "Importance": "High"
+      }
+    },
+    {
+      "name": "Log_Scheduled_Event",
+      "type": "SharePoint.CreateItem",
+      "parameters": {
+        "site": "https://your-tenant.sharepoint.com/sites/your-site",
+        "list": "AuditLog",
+        "item": {
+          "RelatedRequestIdId": "@triggerBody()?['RequestId']",
+          "Event": "BOOKED",
+          "Payload": "@{json(concat('{\"booking_id\":\"', body('Create_Calendar_Event')?['id'], '\",\"start\":\"', outputs('Set_Final_Start_Time'), '\",\"lab\":\"', body('Get_Lab_Request')?['PreferredLab'], '\"}'))}"
+        }
+      }
+    },
+    {
+      "name": "Update_Final_Status",
+      "type": "SharePoint.UpdateItem",
+      "parameters": {
+        "site": "https://your-tenant.sharepoint.com/sites/your-site",
+        "list": "LabRequests",
+        "id": "@triggerBody()?['RequestId']",
+        "item": {
+          "Status": "NOTIFIED"
+        }
+      }
+    }
+  ]
+}

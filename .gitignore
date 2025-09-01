@@ -1,0 +1,29 @@
+# Node
+node_modules/
+package-lock.json
+npm-debug.log
+.vscode/
+
+# front-end build
+frontend/dist/
+frontend/node_modules/
+
+# functions / backend
+functions/node_modules/
+functions/.firebase/
+
+# local env / secrets
+.env
+*.local
+firebase-debug.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

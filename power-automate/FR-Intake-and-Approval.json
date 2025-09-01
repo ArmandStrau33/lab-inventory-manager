@@ -1,0 +1,205 @@
+{
+  "name": "FR-Intake-and-Approval",
+  "description": "Automates lab request intake, inventory check, and approval process",
+  "trigger": {
+    "type": "SharePoint",
+    "operation": "When an item is created",
+    "parameters": {
+      "site": "https://your-tenant.sharepoint.com/sites/your-site",
+      "list": "LabRequests"
+    }
+  },
+  "actions": [
+    {
+      "name": "Initialize_vMissing",
+      "type": "InitializeVariable",
+      "parameters": {
+        "name": "vMissing",
+        "type": "Array",
+        "value": []
+      }
+    },
+    {
+      "name": "Split_Materials",
+      "type": "Compose",
+      "parameters": {
+        "inputs": "@split(triggerOutputs()?['body/Materials'], ',')"
+      }
+    },
+    {
+      "name": "Apply_to_each_Material",
+      "type": "Foreach",
+      "parameters": {
+        "foreach": "@outputs('Split_Materials')",
+        "actions": [
+          {
+            "name": "Get_Inventory_Item",
+            "type": "SharePoint.GetItems",
+            "parameters": {
+              "site": "https://your-tenant.sharepoint.com/sites/your-site",
+              "list": "Inventory",
+              "filter": "Material eq '@{trim(items('Apply_to_each_Material'))}'"
+            }
+          },
+          {
+            "name": "Check_Stock_Level",
+            "type": "Condition",
+            "parameters": {
+              "condition": "@or(equals(length(body('Get_Inventory_Item')?['value']), 0), lessOrEquals(first(body('Get_Inventory_Item')?['value'])?['Quantity'], first(body('Get_Inventory_Item')?['value'])?['MinQty']))",
+              "actions": {
+                "Append_Missing_Item": {
+                  "type": "AppendToArrayVariable",
+                  "parameters": {
+                    "name": "vMissing",
+                    "value": "@trim(items('Apply_to_each_Material'))"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Check_if_Materials_Missing",
+      "type": "Condition",
+      "parameters": {
+        "condition": "@greater(length(variables('vMissing')), 0)",
+        "actions": {
+          "Update_Status_Missing": {
+            "type": "SharePoint.UpdateItem",
+            "parameters": {
+              "site": "https://your-tenant.sharepoint.com/sites/your-site",
+              "list": "LabRequests",
+              "id": "@triggerOutputs()?['body/ID']",
+              "item": {
+                "Status": "INVENTORY_MISSING"
+              }
+            }
+          },
+          "Send_Materials_Request_Email": {
+            "type": "Office365.SendEmailV2",
+            "parameters": {
+              "To": "coach@school.za;labtech@school.za",
+              "Subject": "Request materials for @{triggerOutputs()?['body/Title']}",
+              "Body": "<h3>Materials Request</h3><p><strong>Teacher:</strong> @{triggerOutputs()?['body/TeacherName']}</p><p><strong>Experiment:</strong> @{triggerOutputs()?['body/Title']}</p><p><strong>Missing Materials:</strong></p><ul>@{join(variables('vMissing'), '</li><li>')}</ul><p><strong>Requested Date:</strong> @{triggerOutputs()?['body/PreferredDate']}</p>",
+              "Importance": "High"
+            }
+          },
+          "Log_Procurement_Event": {
+            "type": "SharePoint.CreateItem",
+            "parameters": {
+              "site": "https://your-tenant.sharepoint.com/sites/your-site",
+              "list": "AuditLog",
+              "item": {
+                "RelatedRequestIdId": "@triggerOutputs()?['body/ID']",
+                "Event": "PROCUREMENT_REQUESTED",
+                "Payload": "@{json(concat('{\"missing_items\":', string(variables('vMissing')), '}'))}"
+              }
+            }
+          }
+        },
+        "else": {
+          "Update_Status_OK": {
+            "type": "SharePoint.UpdateItem",
+            "parameters": {
+              "site": "https://your-tenant.sharepoint.com/sites/your-site",
+              "list": "LabRequests",
+              "id": "@triggerOutputs()?['body/ID']",
+              "item": {
+                "Status": "INVENTORY_OK"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Start_Approval_Process",
+      "type": "Office365.StartApproval",
+      "parameters": {
+        "approvalType": "Everyone must approve",
+        "title": "Approve lab request: @{triggerOutputs()?['body/Title']}",
+        "assignedTo": "coach@school.za;labtech@school.za",
+        "details": "Teacher: @{triggerOutputs()?['body/TeacherName']}\nExperiment: @{triggerOutputs()?['body/Title']}\nMaterials: @{triggerOutputs()?['body/Materials']}\nDate: @{triggerOutputs()?['body/PreferredDate']}\nLab: @{triggerOutputs()?['body/PreferredLab']}\n\n@{if(greater(length(variables('vMissing')), 0), concat('Missing Materials: ', join(variables('vMissing'), ', ')), 'All materials available')}"
+      }
+    },
+    {
+      "name": "Check_Approval_Outcome",
+      "type": "Condition",
+      "parameters": {
+        "condition": "@equals(outputs('Start_Approval_Process')?['body/outcome'], 'Approve')",
+        "actions": {
+          "Update_Status_Approved": {
+            "type": "SharePoint.UpdateItem",
+            "parameters": {
+              "site": "https://your-tenant.sharepoint.com/sites/your-site",
+              "list": "LabRequests",
+              "id": "@triggerOutputs()?['body/ID']",
+              "item": {
+                "Status": "APPROVED"
+              }
+            }
+          },
+          "Log_Approved_Event": {
+            "type": "SharePoint.CreateItem",
+            "parameters": {
+              "site": "https://your-tenant.sharepoint.com/sites/your-site",
+              "list": "AuditLog",
+              "item": {
+                "RelatedRequestIdId": "@triggerOutputs()?['body/ID']",
+                "Event": "APPROVED",
+                "Payload": "@{json(concat('{\"approver\":\"', outputs('Start_Approval_Process')?['body/responses'][0]?['responder']?['email'], '\"}'))}"
+              }
+            }
+          },
+          "Call_Scheduling_Flow": {
+            "type": "Workflow",
+            "parameters": {
+              "host": {
+                "workflowReferenceName": "FR-Scheduling-and-Notify"
+              },
+              "body": {
+                "RequestId": "@triggerOutputs()?['body/ID']"
+              }
+            }
+          }
+        },
+        "else": {
+          "Update_Status_Rejected": {
+            "type": "SharePoint.UpdateItem",
+            "parameters": {
+              "site": "https://your-tenant.sharepoint.com/sites/your-site",
+              "list": "LabRequests",
+              "id": "@triggerOutputs()?['body/ID']",
+              "item": {
+                "Status": "REJECTED",
+                "ApprovalReason": "@outputs('Start_Approval_Process')?['body/responses'][0]?['comments']"
+              }
+            }
+          },
+          "Send_Rejection_Email": {
+            "type": "Office365.SendEmailV2",
+            "parameters": {
+              "To": "@triggerOutputs()?['body/TeacherEmail']",
+              "Subject": "Lab request rejected: @{triggerOutputs()?['body/Title']}",
+              "Body": "<h3>Lab Request Rejected</h3><p>Dear @{triggerOutputs()?['body/TeacherName']},</p><p>Your lab request for \"@{triggerOutputs()?['body/Title']}\" has been rejected.</p><p><strong>Reason:</strong> @{outputs('Start_Approval_Process')?['body/responses'][0]?['comments']}</p><p>Please contact the lab coordinator for further assistance.</p>"
+            }
+          },
+          "Log_Rejected_Event": {
+            "type": "SharePoint.CreateItem",
+            "parameters": {
+              "site": "https://your-tenant.sharepoint.com/sites/your-site",
+              "list": "AuditLog",
+              "item": {
+                "RelatedRequestIdId": "@triggerOutputs()?['body/ID']",
+                "Event": "REJECTED",
+                "Payload": "@{json(concat('{\"reason\":\"', outputs('Start_Approval_Process')?['body/responses'][0]?['comments'], '\"}'))}"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
