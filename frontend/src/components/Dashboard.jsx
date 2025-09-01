@@ -162,16 +162,19 @@ const Dashboard = ({ view }) => {
     { day: 'Sun', requests: 3, approvals: 3 }
   ];
 
-  const StatsCard = ({ title, value, subtitle, icon: Icon, color, trend }) => (
+  const StatsCard = ({ title, value, subtitle, icon: Icon, color, trend, onClick }) => (
     <Card 
+      onClick={onClick}
       sx={{ 
         background: `linear-gradient(135deg, ${color}15 0%, ${color}05 100%)`,
         border: `2px solid ${color}30`,
         borderRadius: 3,
+        cursor: onClick ? 'pointer' : 'default',
         transition: 'all 0.3s ease',
         '&:hover': {
           transform: 'translateY(-4px)',
-          boxShadow: `0 8px 25px ${color}25`
+          boxShadow: `0 8px 25px ${color}25`,
+          border: onClick ? `2px solid ${color}60` : `2px solid ${color}30`
         }
       }}
     >
@@ -364,6 +367,7 @@ const Dashboard = ({ view }) => {
             icon={Science}
             color="#2196F3"
             trend={12}
+            onClick={() => setSelectedView('requests')}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
@@ -373,6 +377,7 @@ const Dashboard = ({ view }) => {
             subtitle="Awaiting action"
             icon={Schedule}
             color="#FF9800"
+            onClick={() => setSelectedView('requests')}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
@@ -383,6 +388,7 @@ const Dashboard = ({ view }) => {
             icon={CalendarMonth}
             color="#4CAF50"
             trend={8}
+            onClick={() => setSelectedView('calendar')}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
@@ -392,6 +398,7 @@ const Dashboard = ({ view }) => {
             subtitle="Need attention"
             icon={Warning}
             color="#F44336"
+            onClick={() => setSelectedView('inventory')}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
@@ -402,6 +409,7 @@ const Dashboard = ({ view }) => {
             icon={CheckCircle}
             color="#9C27B0"
             trend={3}
+            onClick={() => setSelectedView('analytics')}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
@@ -412,6 +420,7 @@ const Dashboard = ({ view }) => {
             icon={TrendingUp}
             color="#00BCD4"
             trend={15}
+            onClick={() => setSelectedView('analytics')}
           />
         </Grid>
       </Grid>
@@ -419,8 +428,8 @@ const Dashboard = ({ view }) => {
       {/* Main Content Grid - render sections conditionally depending on selectedView */}
       <Grid container spacing={3}>
         {/* Recent Requests - shown for overview and requests view */}
-        {['overview', 'requests'].includes(selectedView) && (
-          <Grid item xs={12} lg={6}>
+        {(selectedView === 'overview' || selectedView === 'requests') && (
+          <Grid item xs={12} lg={selectedView === 'requests' ? 12 : 6}>
             <Card sx={{ borderRadius: 3, height: 'fit-content' }}>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -445,11 +454,11 @@ const Dashboard = ({ view }) => {
         )}
 
         {/* Charts and Analytics - shown for overview and analytics view */}
-        {['overview', 'analytics'].includes(selectedView) && (
-          <Grid item xs={12} lg={6}>
+        {(selectedView === 'overview' || selectedView === 'analytics') && (
+          <Grid item xs={12} lg={selectedView === 'analytics' ? 12 : 6}>
             <Grid container spacing={3}>
               {/* Approval Status Pie Chart */}
-              <Grid item xs={12}>
+              <Grid item xs={12} md={selectedView === 'analytics' ? 6 : 12}>
                 <Card sx={{ borderRadius: 3 }}>
                   <CardContent>
                     <Typography variant="h6" fontWeight="bold" mb={3}>
@@ -479,7 +488,7 @@ const Dashboard = ({ view }) => {
               </Grid>
 
               {/* Weekly Trends */}
-              <Grid item xs={12}>
+              <Grid item xs={12} md={selectedView === 'analytics' ? 6 : 12}>
                 <Card sx={{ borderRadius: 3 }}>
                   <CardContent>
                     <Typography variant="h6" fontWeight="bold" mb={3}>
@@ -498,13 +507,61 @@ const Dashboard = ({ view }) => {
                   </CardContent>
                 </Card>
               </Grid>
+
+              {/* Additional Analytics for dedicated analytics view */}
+              {selectedView === 'analytics' && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <Card sx={{ borderRadius: 3 }}>
+                      <CardContent>
+                        <Typography variant="h6" fontWeight="bold" mb={3}>
+                          Monthly Trends
+                        </Typography>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <LineChart data={weeklyData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="day" />
+                            <YAxis />
+                            <Tooltip />
+                            <Line type="monotone" dataKey="requests" stroke="#2196F3" strokeWidth={3} />
+                            <Line type="monotone" dataKey="approvals" stroke="#4CAF50" strokeWidth={3} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Card sx={{ borderRadius: 3 }}>
+                      <CardContent>
+                        <Typography variant="h6" fontWeight="bold" mb={3}>
+                          Performance Metrics
+                        </Typography>
+                        <Box>
+                          <Typography variant="body1" mb={2}>
+                            Average Processing Time: <strong>2.3 hours</strong>
+                          </Typography>
+                          <Typography variant="body1" mb={2}>
+                            Teacher Satisfaction: <strong>94%</strong>
+                          </Typography>
+                          <Typography variant="body1" mb={2}>
+                            Inventory Accuracy: <strong>98.5%</strong>
+                          </Typography>
+                          <Typography variant="body1">
+                            Cost Savings: <strong>$12,450</strong> this month
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </>
+              )}
             </Grid>
           </Grid>
         )}
 
         {/* Inventory Status - shown for overview and inventory view */}
-        {['overview', 'inventory'].includes(selectedView) && (
-          <Grid item xs={12} md={6}>
+        {(selectedView === 'overview' || selectedView === 'inventory') && (
+          <Grid item xs={12} md={selectedView === 'inventory' ? 12 : 6}>
             <Card sx={{ borderRadius: 3 }}>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -518,51 +575,109 @@ const Dashboard = ({ view }) => {
                 {dashboardData.inventory.map((item, index) => (
                   <InventoryCard key={index} item={item} />
                 ))}
+                
+                {/* Additional inventory details for dedicated inventory view */}
+                {selectedView === 'inventory' && (
+                  <Box mt={3}>
+                    <Button variant="contained" startIcon={<Add />} sx={{ mr: 2 }}>
+                      Add New Item
+                    </Button>
+                    <Button variant="outlined" startIcon={<Refresh />}>
+                      Refresh Stock
+                    </Button>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>
         )}
 
         {/* Upcoming Labs - shown for overview and calendar view */}
-        {['overview', 'calendar'].includes(selectedView) && (
-          <Grid item xs={12} md={6}>
+        {(selectedView === 'overview' || selectedView === 'calendar') && (
+          <Grid item xs={12} md={selectedView === 'calendar' ? 12 : 6}>
             <Card sx={{ borderRadius: 3 }}>
               <CardContent>
-                <Typography variant="h5" fontWeight="bold" mb={3}>
-                  Upcoming Lab Sessions
-                </Typography>
-                {dashboardData.upcomingLabs.map((lab) => (
-                  <Card 
-                    key={lab.id} 
-                    sx={{ 
-                      mb: 2, 
-                      borderRadius: 2,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      color: 'white'
-                    }}
-                  >
-                    <CardContent>
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Box>
-                          <Typography variant="h6" fontWeight="bold">
-                            {lab.title}
-                          </Typography>
-                          <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                            {lab.teacher} • {lab.students} students
-                          </Typography>
-                        </Box>
-                        <Box textAlign="right">
-                          <Typography variant="h6" fontWeight="bold">
-                            {lab.time}
-                          </Typography>
-                          <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                            {lab.lab}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                ))}
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                  <Typography variant="h5" fontWeight="bold">
+                    Upcoming Lab Sessions
+                  </Typography>
+                  {selectedView === 'calendar' && (
+                    <Box>
+                      <Button variant="outlined" startIcon={<Add />} sx={{ mr: 1 }}>
+                        Schedule Lab
+                      </Button>
+                      <IconButton>
+                        <CalendarMonth />
+                      </IconButton>
+                    </Box>
+                  )}
+                </Box>
+                
+                <Grid container spacing={selectedView === 'calendar' ? 2 : 0}>
+                  {dashboardData.upcomingLabs.map((lab) => (
+                    <Grid item xs={12} md={selectedView === 'calendar' ? 6 : 12} key={lab.id}>
+                      <Card 
+                        sx={{ 
+                          mb: 2, 
+                          borderRadius: 2,
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          color: 'white',
+                          cursor: 'pointer',
+                          transition: 'transform 0.2s',
+                          '&:hover': {
+                            transform: 'translateY(-2px)'
+                          }
+                        }}
+                      >
+                        <CardContent>
+                          <Box display="flex" justifyContent="space-between" alignItems="center">
+                            <Box>
+                              <Typography variant="h6" fontWeight="bold">
+                                {lab.title}
+                              </Typography>
+                              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                {lab.teacher} • {lab.students} students
+                              </Typography>
+                              {selectedView === 'calendar' && (
+                                <Typography variant="body2" sx={{ opacity: 0.8, mt: 1 }}>
+                                  📅 {lab.date}
+                                </Typography>
+                              )}
+                            </Box>
+                            <Box textAlign="right">
+                              <Typography variant="h6" fontWeight="bold">
+                                {lab.time}
+                              </Typography>
+                              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                {lab.lab}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+                
+                {/* Additional calendar features for dedicated calendar view */}
+                {selectedView === 'calendar' && (
+                  <Box mt={3}>
+                    <Typography variant="h6" fontWeight="bold" mb={2}>
+                      Quick Actions
+                    </Typography>
+                    <Box display="flex" gap={2} flexWrap="wrap">
+                      <Button variant="contained" size="small">
+                        View Full Calendar
+                      </Button>
+                      <Button variant="outlined" size="small">
+                        Export Schedule
+                      </Button>
+                      <Button variant="outlined" size="small">
+                        Room Availability
+                      </Button>
+                    </Box>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>

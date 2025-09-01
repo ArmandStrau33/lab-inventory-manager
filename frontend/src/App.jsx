@@ -97,7 +97,13 @@ export default function App(){
   const renderCurrentView = () => {
     switch(currentView) {
       case 'dashboard':
-        return <Dashboard view={currentView} />
+        return <Dashboard view="overview" />
+      case 'analytics':
+        return <Dashboard view="analytics" />
+      case 'inventory':
+        return <Dashboard view="inventory" />
+      case 'schedule':
+        return <Dashboard view="calendar" />
       case 'intake':
         return (
           <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
@@ -120,7 +126,7 @@ export default function App(){
           </Container>
         )
       default:
-        return <Dashboard view={currentView} />
+        return <Dashboard view="overview" />
     }
   }
 
